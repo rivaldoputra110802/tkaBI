@@ -58,7 +58,7 @@
                 <p class="text-sm text-gray-500 font-semibold mb-1">NILAI AKHIR</p>
                 <p id="skor-akhir" class="text-5xl font-extrabold text-green-600">100</p>
             </div>
-            <button onclick="location.reload()" class="bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Kembali ke Awal</button>
+            <button onclick="keluarKeAwal()" class="bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Kembali ke Awal</button>
         </div>
     </div>
 
@@ -70,8 +70,6 @@
         let namaAktif = "";
         let currentIndex = 0;
         let jawabanSiswa = [];
-        
-        let waktuSisa = 120 * 60; // 120 menit dalam satuan detik
         let timerInterval;
 
         // ---------------------------------------------------------
@@ -128,7 +126,7 @@
             <p style="margin-bottom: 8px; text-align: justify;">Adit dan Danu senang sekali hari ini karena Ibu dan Ayah akan mengajak mereka pergi melihat perayaan Cap Go Meh di Pulau Kemaro. Masyarakat Tionghoa di Kota Palembang merayakan Cap Go Meh, dan orangtuanya ingin mengenalkan perayaan tersebut kepada mereka.</p>
             <p style="margin-bottom: 8px; text-align: justify;">Ini adalah kedua kalinya Adit dan Danu pergi ke Pulau Kemaro. Waktu itu, mereka naik kapal dari bawah jembatan Musi. Kali ini, mereka akan menyeberangi sungai Musi dengan berjalan kaki di atas jembatan ponton, yang dipasang khusus saat perayaan Imlek setiap tahunnya. Mereka berangkat setelah makan malam.</p>
             <p style="margin-bottom: 8px; text-align: justify;">Malam itu, banyak orang berjalan kaki melewati jembatan ponton ke Pulau Kemaro. Semua orang memakai baju merah, termasuk keluarga Adit dan Danu. Di Pulau Kemaro, mereka menyaksikan pertunjukkan barongsai dan penerbangan lampion. Acaranya sangat meriah. Adit dan Danu senang bisa mengenal kebudayaan Tionghoa melalui perayaan Cap Go Meh.</p>
-            <p style="margin-bottom: 15px; text-align: justify;">Namun, ketika mereka tiba di Pulau Kemaro, mereka kecewa karena hujan deras turun. Pertunjukkan barongsai dan penerbangan lampion harus dibatalkan. Adit dan Danu merasa sedih karena tidak bisa melihat semua acara yang telah mereka nantikan. Meskipun begitu, mereka tetap berusaha menikmati perayaan Cap Go Meh dengan berkeliling pulau dan mencoba makanan khas Imlek. Mereka belajar bahwa tidak semua hal bisa berjalan sesuai rencana, dan yang terpenting adalah tetap bersyukur dan menjalani dengan baik apa yang ada.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Namun, ketika mereka tiba di Pulau Kemaro, mereka kecewa karena hujan deras turun. Pertunjukkan barongsai dan penerbangan lampion harus dibatalkan. Adit dan Danu merasa sedih karena tidak bisa melihat semua acara yang telah nantikan. Meskipun begitu, mereka tetap berusaha menikmati perayaan Cap Go Meh dengan berkeliling pulau dan mencoba makanan khas Imlek. Mereka belajar bahwa tidak semua hal bisa berjalan sesuai rencana, dan yang terpenting adalah tetap bersyukur dan menjalani dengan baik apa yang ada.</p>
         `;
         const wacanaKota = `
             <img src="soal16.png">
@@ -217,12 +215,41 @@
         // ---------------------------------------------------------
         // 3. LOGIKA CBT OFFLINE & TIMER
         // ---------------------------------------------------------
+        
+        // Cek jika siswa merefresh halaman maka status login/ujian diteruskan
+        window.onload = function() {
+            if (localStorage.getItem('nama_bhs_aktif')) {
+                namaAktif = localStorage.getItem('nama_bhs_aktif');
+                document.getElementById('input-nama').value = namaAktif;
+                
+                // Bypass login screen
+                document.getElementById('layar-login').classList.add('hidden');
+                document.getElementById('area-ujian').classList.remove('hidden');
+                document.getElementById('header-nama-siswa').innerText = namaAktif;
+                
+                // Ambil jawaban yang tersimpan
+                const saved = localStorage.getItem('jawaban_bhs_' + namaAktif);
+                if(saved) {
+                    jawabanSiswa = JSON.parse(saved);
+                    currentIndex = parseInt(localStorage.getItem('index_bhs_' + namaAktif)) || 0;
+                } else {
+                    jawabanSiswa = new Array(paketSoalTKA.length).fill(null);
+                }
+                
+                renderSoal(currentIndex);
+                jalankanTimer(); // Jalankan ulang timer
+            }
+        };
+
         function mulaiUjian() {
             namaAktif = document.getElementById('input-nama').value.trim();
             if (!namaAktif) {
                 alert("Namamu belum diisi, ayo isi dulu!");
                 return;
             }
+
+            // Simpan nama siswa aktif ke localStorage
+            localStorage.setItem('nama_bhs_aktif', namaAktif);
 
             document.getElementById('layar-login').classList.add('hidden');
             document.getElementById('area-ujian').classList.remove('hidden');
@@ -243,33 +270,46 @@
         function jalankanTimer() {
             const timerElemen = document.getElementById('timer-display');
             
+            // Ambil waktu akhir (endTime) dari local storage, atau buat baru jika belum ada
+            let endTime = localStorage.getItem('endtime_bhs_' + namaAktif);
+            if (!endTime) {
+                // Atur durasi murni 120 menit (2 Jam) = 120 * 60 * 1000 milidetik
+                endTime = Date.now() + (120 * 60 * 1000); 
+                localStorage.setItem('endtime_bhs_' + namaAktif, endTime);
+            } else {
+                endTime = parseInt(endTime);
+            }
+
             timerInterval = setInterval(() => {
-                waktuSisa--;
+                let waktuSisaMS = endTime - Date.now();
                 
-                let jam = Math.floor(waktuSisa / 3600);
-                let menit = Math.floor((waktuSisa % 3600) / 60);
-                let detik = waktuSisa % 60;
-                
-                // Format HH:MM:SS
-                let formatWaktu = "";
-                if (jam > 0) {
-                    formatWaktu += `${jam.toString().padStart(2, '0')}:`;
+                if (waktuSisaMS <= 0) {
+                    // WAKTU HABIS
+                    clearInterval(timerInterval);
+                    timerElemen.innerText = "00:00:00";
+                    alert("WAKTU HABIS! Jawabanmu otomatis dikumpulkan.");
+                    kumpulkanJawaban(true);
+                    return;
                 }
-                formatWaktu += `${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
+
+                // Konversi milidetik ke Jam, Menit, Detik
+                let sisaDetik = Math.floor(waktuSisaMS / 1000);
+                let jam = Math.floor(sisaDetik / 3600);
+                let menit = Math.floor((sisaDetik % 3600) / 60);
+                let detik = sisaDetik % 60;
+                
+                // Format selalu HH:MM:SS
+                let formatWaktu = `${jam.toString().padStart(2, '0')}:${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
                 
                 timerElemen.innerText = formatWaktu;
                 
-                // Peringatan 3 menit terakhir
-                if (waktuSisa <= 180 && waktuSisa > 0) {
+                // Peringatan 3 menit (180 detik) terakhir
+                if (sisaDetik <= 180) {
                     timerElemen.classList.add('waktu-habis');
+                } else {
+                    timerElemen.classList.remove('waktu-habis');
                 }
 
-                if (waktuSisa <= 0) {
-                    clearInterval(timerInterval);
-                    timerElemen.innerText = "00:00";
-                    alert("WAKTU HABIS! Jawabanmu otomatis dikumpulkan.");
-                    kumpulkanJawaban(true);
-                }
             }, 1000);
         }
 
@@ -417,8 +457,17 @@
             document.getElementById('nama-hasil').innerText = namaAktif;
             document.getElementById('skor-akhir').innerText = nilaiAkhir;
 
+            // Bersihkan local storage agar ujian tidak lanjut saat di-refresh lagi
+            localStorage.removeItem('nama_bhs_aktif');
             localStorage.removeItem('jawaban_bhs_' + namaAktif);
             localStorage.removeItem('index_bhs_' + namaAktif);
+            localStorage.removeItem('endtime_bhs_' + namaAktif);
+        }
+
+        function keluarKeAwal() {
+            // Hapus paksa semua penyimpanan lokal lalu reload
+            localStorage.clear();
+            location.reload();
         }
     </script>
 </body>
