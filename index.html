@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBT Les Ahe - TKA Bahasa Indonesia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #konten-wacana img { max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto; }
+        .hidden { display: none !important; }
+        .waktu-habis { animation: pulse 1s infinite; background-color: #ef4444; color: white; border-color: #dc2626; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 antialiased min-h-screen">
+
+    <!-- ================= LAYAR LOGIN ================= -->
+    <div id="layar-login" class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-blue-600">
+            <h1 class="text-2xl font-bold text-center text-blue-700 mb-2">Ujian TKA Bahasa</h1>
+            <p class="text-center text-gray-500 mb-6">Waktu: 60 Menit | Jumlah: 30 Soal</p>
+            <div class="mb-6">
+                <label class="block text-gray-700 font-semibold mb-2">Nama Lengkap</label>
+                <input type="text" id="input-nama" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik namamu di sini...">
+            </div>
+            <button onclick="mulaiUjian()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Mulai Kerjakan</button>
+        </div>
+    </div>
+
+    <!-- ================= AREA UJIAN (CBT) ================= -->
+    <div id="area-ujian" class="hidden max-w-2xl mx-auto bg-white min-h-screen shadow-md relative pb-24">
+        <header class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center gap-2">
+            <h1 class="font-bold text-base md:text-lg truncate" id="header-nama-siswa">TKA Bahasa</h1>
+            <div class="flex gap-2 items-center">
+                <span id="timer-display" class="bg-white text-blue-700 px-3 py-1 rounded-full text-sm font-bold border border-blue-300 shadow-inner shrink-0">60:00</span>
+                <span id="nomor-soal-display" class="bg-blue-800 px-3 py-1 rounded-full text-sm font-semibold border border-blue-500 shrink-0">1/30</span>
+            </div>
+        </header>
+
+        <main class="p-5">
+            <div id="konten-wacana" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm md:text-base leading-relaxed hidden"></div>
+            <div id="konten-pertanyaan" class="font-bold text-gray-900 mb-4 text-base md:text-lg"></div>
+            <div id="wadah-pilihan" class="flex flex-col gap-2"></div>
+        </main>
+
+        <footer class="fixed bottom-0 w-full max-w-2xl bg-white border-t border-gray-200 p-4 flex justify-between gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <button id="btn-prev" onclick="gantiSoal(-1)" class="flex-1 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition hidden">Sebelumnya</button>
+            <button id="btn-next" onclick="gantiSoal(1)" class="flex-1 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition">Selanjutnya</button>
+            <button id="btn-selesai" onclick="kumpulkanJawaban(false)" class="flex-1 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition hidden">Selesai Ujian</button>
+        </footer>
+    </div>
+
+    <!-- ================= LAYAR HASIL ================= -->
+    <div id="layar-hasil" class="hidden flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-green-500 text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Ujian Selesai!</h2>
+            <p class="text-gray-600 mb-6">Kerja bagus, <span id="nama-hasil" class="font-bold text-blue-600"></span>.</p>
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
+                <p class="text-sm text-gray-500 font-semibold mb-1">NILAI AKHIR</p>
+                <p id="skor-akhir" class="text-5xl font-extrabold text-green-600">100</p>
+            </div>
+            <button onclick="location.reload()" class="bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Kembali ke Awal</button>
+        </div>
+    </div>
+
+    <!-- ================= SCRIPT LOGIKA & DATABASE ================= -->
+    <script>
+        // ---------------------------------------------------------
+        // 1. VARIABEL GLOBAL APLIKASI
+        // ---------------------------------------------------------
+        let namaAktif = "";
+        let currentIndex = 0;
+        let jawabanSiswa = [];
+        
+        let waktuSisa = 60 * 60; // 60 menit dalam satuan detik
+        let timerInterval;
+
+        // ---------------------------------------------------------
+        // 2. DATABASE WACANA & SOAL (BAHASA INDONESIA)
+        // ---------------------------------------------------------
+        const wacanaMangrove = `
+            <p style="margin-bottom: 10px; font-weight: bold; text-align: center;">Indahnya Hutan-Hutan Mangrove di Indonesia</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Hutan Mangrove di Kulon Progo, Yogyakarta adalah tempat yang menyuguhkan keindahan alam menyejukkan hati. Hutan ini terletak di dekat Pantai Congot, kawasan ini terbagi menjadi beberapa zona menarik seperti Pasir Mendit, Jembatan Api-Api, dan Pantai Kadilangu. Luasnya mencapai sekitar tiga kilometer persegi, dipenuhi pohon-pohon bakau dengan akar unik yang menjulur di atas air.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Begitu melangkah ke dalam area, pengunjung akan disambut oleh jembatan kayu dan suasana rindang yang membuat hati tenang. Banyak spot foto menarik seperti ayunan, gazebo, dan menara pandang. Tak heran jika tempat ini disebut sebagai "permata tersembunyi" di Kulon Progo.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Selain indah, hutan ini juga menjadi rumah bagi beragam satwa seperti burung kuntul, kepiting, udang, dan biawak kecil. Ada jalur kayu yang bisa dilewati sambil menikmati semilir angin pantai. Jika ingin lebih dekat dengan alam, pengunjung juga bisa naik perahu menyusuri rimbunnya hutan.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Hutan Mangrove Kulon Progo bukan hanya indah dipandang mata, tapi juga punya peran penting bagi lingkungan. Tempat ini ibarat "paru-paru kecil" pesisir yang menjaga alam tetap seimbang sekaligus menjadi lokasi belajar mencintai alam sejak dini.</p>
+        `;
+        const wacanaBakwan = `
+            <img src="soal4.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Bakwan merupakan makanan unik yang banyak disukai. Bakwan muncul karena pengaruh dari berbagai budaya, seperti Cina, Jepang, bahkan Eropa (Portugis).</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Awalnya, bakwan terbuat dari daging dan tepung yang digoreng. Di Jepang, sayur yang digoreng tepung disebut "tempura". Makanan tersebut bisa jadi ikut mempengaruhi berkembangnya bakwan di Indonesia.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Kini, bakwan berisi aneka sayuran, seperti taoge, kol, dan wortel, yang dicampur dengan adonan tepung berbumbu rempah. Bisa juga ditambahkan isian udang, sosis, atau bakso.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Nama bakwan berbeda di tiap daerah. Jakarta, Yogyakarta, Manado, dan Lampung menyebutnya bakwan. Di banyak kota di Jawa Timur disebut ote-ote atau weci. Di Bandung disebut bala-bala. Sementara, di Semarang dan Pekalongan disebut badak.</p>
+        `;
+        const wacanaBotol = `
+            <p style="margin-bottom: 8px; text-align: justify;">Salma, Alvin, dan Siva sedang menikmati waktu istirahat.</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Salma:</strong> (memeluk botol minumnya) "Minum dulu, ah! Botolku ini hadiah dari Ibu waktu ulang tahun. Aku beri nama dia Si Biru."</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Alvin:</strong> "Hah? Botol aja dikasih nama? Aneh banget, Sal!"</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Siva:</strong> "Ih, botol minum Salma lucu banget. Kamu tiap hari bawa Si Biru, ya?"</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Salma:</strong> "Iya, dong. Si Biru sudah menemani aku setahun ini. Aku jadi nggak pernah beli minuman kemasan lagi!"</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Alvin:</strong> "Ah, ribet. Aku sih, tinggal beli aja. Kalau sudah habis tinggal buang." (mengejek Salma)</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Salma:</strong> "Vin, tahu, nggak? Plastik yang kamu buang itu bisa jadi sampah lingkungan bertahun-tahun. Bisa mencemari tanah dan air juga, lho."</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Siva:</strong> "Benar, Vin. Aku juga sekarang bawa botol. Nih, gambar dinosaurus!"</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Salma:</strong> "Kita nggak bisa terus tutup mata soal sampah plastik. Kita harus peduli. Mulai dari hal kecil, seperti bawa botol sendiri."</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Alvin:</strong> "Hmm, kalau aku punya botol keren, mungkin aku jadi ingin bawa botol."</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Salma:</strong> "Benar sekali. Kita bantu cari botol yang cocok buat kamu, deh."</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Alvin:</strong> "Oke, setuju! Aku mau botol warna oranye, biar beda dari yang lain!"</p>
+            <p style="margin-bottom: 15px; text-align: justify;"><strong>Siva:</strong> "Siap, nanti kita cari bersama, ya!"</p>
+        `;
+        const wacanaMeteor = `
+            <img src="soal9.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Buku harianku,</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Ayah akan mengajakku melihat hujan meteor. Meteor adalah batu atau debu antar-planet. Ketika meteor jatuh ke bumi, meteor terbakar karena gesekan lapisan udara bumi. Itu sebabnya, meteor terlihat seperti bintang jatuh atau bintang berpindah.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Aku berdoa supaya hari itu tidak hujan. Meteor tampak lebih jelas jika langit cerah. Jika aku beruntung, aku dapat melihat belasan meteor per jam.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Awalnya aku khawatir kalau bintang jatuh dapat menimpaku. Untunglah, ayah sudah menenangkanku. Hujan meteor tidak berbahaya, kok. Jangan takut, meteor ini akan habis terbakar di langit.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Duh, rasanya tidak sabar. Aku senang sekali menghabiskan waktu dengan ayah!</p>
+        `;
+        const wacanaGiga = `
+            <img src="soal11.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Giga si Segitiga mempunyai banyak ide. Dia senang menirukan bentuk. Dia sering mengajak teman-temannya bermain bersama.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Banyak bentuk yang bisa ditiru. Bentuk dan sudut yang sama membuat mereka selalu serasi. Contohnya pohon cemara, gunung, atap rumah, bendera, dan kipas angin.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Giga juga suka bermain dengan Pasukan Kotak. Banyak bentuk yang bisa ditirukan, seperti roket, ikan, dan menara. Saat bermain dengan Heksagonal, dia menirukan bentuk bunga.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Bentuk mereka memang berbeda. Namun, mereka memiliki sudut-sudut yang pas.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Giga sedih Lingkaran tak mau bermain dengannya. Lingkaran takut pada sudut-sudut tajam milik Giga. Padahal, Giga bisa berhati-hati. Giga juga sudah membayangkan bentuk-bentuk yang bisa dibuat.</p>
+        `;
+        const wacanaCapGoMeh = `
+            <img src="soal13.png">
+            <p style="margin-bottom: 8px; font-weight: bold;">Oleh: Ayyubie Cantika Yuranda</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Adit dan Danu senang sekali hari ini karena Ibu dan Ayah akan mengajak mereka pergi melihat perayaan Cap Go Meh di Pulau Kemaro. Masyarakat Tionghoa di Kota Palembang merayakan Cap Go Meh, dan orangtuanya ingin mengenalkan perayaan tersebut kepada mereka.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Ini adalah kedua kalinya Adit dan Danu pergi ke Pulau Kemaro. Waktu itu, mereka naik kapal dari bawah jembatan Musi. Kali ini, mereka akan menyeberangi sungai Musi dengan berjalan kaki di atas jembatan ponton, yang dipasang khusus saat perayaan Imlek setiap tahunnya. Mereka berangkat setelah makan malam.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Malam itu, banyak orang berjalan kaki melewati jembatan ponton ke Pulau Kemaro. Semua orang memakai baju merah, termasuk keluarga Adit dan Danu. Di Pulau Kemaro, mereka menyaksikan pertunjukkan barongsai dan penerbangan lampion. Acaranya sangat meriah. Adit dan Danu senang bisa mengenal kebudayaan Tionghoa melalui perayaan Cap Go Meh.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Namun, ketika mereka tiba di Pulau Kemaro, mereka kecewa karena hujan deras turun. Pertunjukkan barongsai dan penerbangan lampion harus dibatalkan. Adit dan Danu merasa sedih karena tidak bisa melihat semua acara yang telah mereka nantikan. Meskipun begitu, mereka tetap berusaha menikmati perayaan Cap Go Meh dengan berkeliling pulau dan mencoba makanan khas Imlek. Mereka belajar bahwa tidak semua hal bisa berjalan sesuai rencana, dan yang terpenting adalah tetap bersyukur dan menjalani dengan baik apa yang ada.</p>
+        `;
+        const wacanaKota = `
+            <img src="soal16.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Perubahan iklim, bencana alam, dan kesehatan manusia adalah masalah serius. Untuk mengatasinya, pemerintah berupaya membangun kota berkelanjutan. Kita perlu tahu ciri-ciri kota yang nyaman dan sehat.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Kota berkelanjutan memiliki transportasi publik ramah lingkungan dan murah. Bus dan kereta tidak mencemari udara serta terjangkau. Kendaraan pribadi juga harus ramah lingkungan, seperti mobil listrik. Kota ini menyediakan jalur khusus untuk pejalan kaki dan pesepeda.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Listrik di kota berkelanjutan berasal dari tenaga surya. Gedung-gedung dirancang hemat energi dan ramah lingkungan. Penggunaan air pun dilakukan secara bijak dan efisien. Fasilitas publik mudah diakses oleh semua orang. Taman, perpustakaan, dan rumah sakit tersedia di berbagai lokasi.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Kota juga memiliki ruang terbuka hijau yang nyaman dan asri. Kota berkelanjutan memperhatikan produksi makanan ramah lingkungan. Pengelolaan sampah dilakukan dengan baik, termasuk daur ulang sampah. Dengan semua ciri-ciri ini, kota menjadi sehat, nyaman, dan ramah lingkungan. Mari jaga kota kita agar tetap berkelanjutan!</p>
+        `;
+        const wacanaRuwatan = `
+            <img src="soal19.png">
+            <p style="margin-bottom: 8px; text-align: justify;">"Pokoknya Rara mau hp sebelum ruwatan!" Rengek Rara.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Maaf, Nak! Ibu belum bisa membelikannya!" Terang Ibu.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Jadi Rara tidak bisa ikut tradisi ruwatan?" tanyanya kesal. Ibu sedih mendengar pertanyaan Rara. Ayah yang tidak sengaja lewat, ikut mendengar.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Rara! Kamu minta hp?" Tanya Ayah.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Iya!" Jawabnya. "Kata ketua adat, Rara boleh minta satu permintaan ke ayah ibu. Trus, permintaan Rara itu harus dipenuhi, baru Rara bisa ikut ruwatan, Yah!" Lanjut Rara.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Ayah mengangguk, dan perlahan menjelaskan keadaan mereka. Ibunya seorang pedagang kecil dan ayah hanya penjaga vila. Jadi cukup berat untuk membelikan hp. Rara sadar, dirinya tidak kaya dan meminta maaf ke Ayah dan Ibu. Akhirnya Rara hanya meminta dibelikan buku cerita di pasar.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Tibalah hari Ruwatan, saat rambut Rara akan dipotong. Rara sudah bersiap dengan baju adat. "Wuah, bagus bajunya!" Kata Rara takjup. "Ayo, Nak! Kamu harus segera bergabung dengan teman lainnya!" Perintah Ibu.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Mau kemana, Bu?" Tanya Rara. Ibu menjelaskan kalau Rara akan dibawa ke tempat ritual ruwatan. Di sana Ketua adat akan memotong rambut gimbal Rara.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Setelah rambut Rara dipotong, Rara ngapain, Bu?"</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Penyerahan permintaan dan larung rambut!" Jawab Ibu dan Rara menjadi bingung. "Ibu dan ayah akan memberikan barang yang kamu minta kemarin." Jawab Ibu.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">"Asik! Terima kasih, Bu!" ucap Rara. "Tapi kamu harus tetap ikut acara larung rambut, ya, di sungai dekat desa!"</p>
+            <p style="margin-bottom: 15px; text-align: justify;">"Baik, Ibu!" Sambil memberikan jempol.</p>
+        `;
+        const wacanaArul = `
+            <img src="soal22.png" style="max-width: 150px;">
+            <p style="margin-bottom: 8px; text-align: justify;">Nilai Arul selalu bagus sejak dulu. Padahal, dia tidak pernah belajar. Tapi, nilai Arul mulai menurun.</p>
+            <p style="margin-bottom: 8px; text-align: justify;"><strong>Dewi:</strong> "Arul, belajar bareng, yuk! Bareng Reno dan Erni."<br><strong>Arul:</strong> "Enggak mau, ah! Aku malas."<br><strong>Dewi:</strong> "Ya, sudah. Aku belajar bareng dulu, ya."<br><strong>Arul:</strong> "Belajar saja sana. Paling nilainya lebih bagus aku. Mending aku main bola."</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Arul kembali bermain. Dia mengambil sepatunya. Dia berlari ke lapangan sambil membawa bola. Dia menendang bola ke gawang yang kosong.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Keesokan hari setelah ujian, Arul kaget saat melihat nilainya.<br><strong>Arul:</strong> "Kok nilaiku jelek banget?"<br><strong>Reno:</strong> "Emang apa yang kamu pelajari, Rul?"<br><strong>Arul:</strong> "Buat apa aku belajar? Nilaiku loh selalu bagus."<br><strong>Erni:</strong> "Ya, enggak bisa begitu, Arul. Pelajaran kita kan semakin susah."<br><strong>Dewi:</strong> "Iya, kita sudah harus rajin belajar."<br><strong>Arul:</strong> "Dulu aku tidak belajar. Nilaiku juga selalu bagus, 'kan?"<br><strong>Reno:</strong> "Iya. Itu 'kan dulu. Lihat nilaimu sekarang. Semakin lama semakin jelek, 'kan?"</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Arul hanya bisa memandangi nilainya.<br><strong>Dewi:</strong> "Kamu harus belajar kalau mau nilai bagus."<br><strong>Erni:</strong> "Iya. Berakit-rakit ke hulu, berenang-renang kemudian. Bersakit-sakit dahulu, bersenang-senang kemudian."<br><strong>Dewi:</strong> "Betul. Harus berusaha kalau mau berhasil."<br><strong>Arul:</strong> "Apa itu?"<br><strong>Reno:</strong> "Peribahasa, Rul. Ayo belajar bareng biar sama-sama tahu."</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Arul pun mengangguk.</p>
+        `;
+        const wacanaNelayan = `
+            <img src="soal25.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Sudah bertahun-tahun Yunus bekerja sebagai nelayan. Setiap hari ia mengarungi laut dan melempar jala. Asal tidak badai, Yunus pasti melaut.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Hal ini sangat berbeda dengan Kamal. Padahal keduanya sama-sama mencari hidup di laut. Tapi, Kamal sering bermalas-malasan.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Suatu hari, Kamal datang ke rumah Yunus.<br>"Yunus, bolehkah aku minta ikan?" kata Kamal.<br>"Lho, kamu tidak dapat ikan?" tanya Yunus. "Padahal lagi musim ikan, lho."<br>"Ah, itu. Aku kemarin tidak melaut. Aku sibuk memperbaiki perahuku yang rusak."</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Merasa kasihan, Yunus memberikan beberapa ikan. Yunus juga mengingatkan Kamal untuk segera melaut. Beberapa hari berlalu, Kamal masih belum melaut. Alasan Kamal seluas lautan. Tidak ada habisnya. Mulai dari ombak, perahu, sampai anak. Semuanya dijadikan alasan oleh Kamal. Yunus sampai kesal.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Saat Kamal datang untuk meminta ikan lagi.<br>"Kamal, ayo melaut. Ikut aku kalau perahumu masih rusak," tegas Yunus.<br>"Waduh, belum bisa," tolak Kamal.<br>"Ikut saja. Aku kesal melihatmu bermalas-malasan setiap hari," kata Yunus.<br>"Orang kampung juga malas denganmu," kata Yunus. "Setiap hari hanya tiduran, lalu meminta ikan pada tetangga."</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Kamal hanya terdiam. Kamal memang sudah semakin susah meminta ikan. Dengan berat, Kamal melawan rasa malasnya. Ia ikut Yunus melaut. Setiap hari, Kamal ikut dengan Yunus. Sekarang Kamal sudah melaut setiap hari. Kamal bahkan melaut dengan perahunya sendiri.</p>
+        `;
+        const wacanaLianne = `
+            <img src="soal28.png">
+            <p style="margin-bottom: 8px; text-align: justify;">Halo! Namaku Lianne. Aku suka sekali menggambar. Ini teman-temanku. Ada Albert, Giffari, dan Amber. Kami sedang bermain bersama.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Suatu hari, Albert memenangi lomba matematika. Sebagai temannya, aku sangat bangga kepadanya! Namun, saat aku pulang, Mama berkata, "Coba saja kamu pintar seperti Albert! Dia pintar matematika! Dia pasti rajin belajar!"</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Aku tidak boleh mengecewakan Mama. Aku harus bisa seperti Albert. Namun, hasil belajarku semalam suntuk tetap saja tidak berhasil.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Saat aku jalan bersama Mama, aku bertemu Giffari. Dia sedang bermain basket. Keren sekali. "Coba saja kamu pandai bermain basket seperti Giffari!" seru Mama. Aku berlatih basket. Susah sekali ternyata. Aku tidak bisa.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Saat pulang, aku melihat Amber sedang bernyanyi. Wah, merdu sekali! "Coba saja kamu pandai bernyanyi seperti Amber! Lihat! Bagus sekali, bukan?" seru Mama. Aku mencoba menyanyi, "Bukan begitu!!! Nada kamu salah!!!" teriak Amber.</p>
+            <p style="margin-bottom: 8px; text-align: justify;">Uuuh! Aku kesal sekali. Lebih baik aku menggambar saja. Sebaiknya, aku melatih kemampuan menggambarku di luar. Bertemu dengan orang-orang. Berkeliling tempat berbeda. Mencari ide menarik. Menyenangkan sekali!</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Wah, ada lomba menggambar! Aku pun mengirimkan gambarku. Beberapa hari kemudian, tiba-tiba Mama memberitahuku. Katanya, aku menang lomba menggambar! Mama bangga sekali denganku. Mama sadar bahwa setiap anak memiliki kelebihan masing-masing. Aku senang akhirnya Mama menerima bakatku apa adanya.</p>
+        `;
+
+        const paketSoalTKA = [
+            { tipe: "Pilihan Ganda", wacana: wacanaMangrove, pertanyaan: "Bagan manakah yang sesuai untuk menggambarkan hutan mangrove pada teks?", pilihan: ["<strong>Lokasi:</strong> Kulon Progo | <strong>Zona Menarik:</strong> Ayunan | <strong>Contoh Satwa:</strong> Kepiting", "<strong>Lokasi:</strong> Dekat Pantai Congot | <strong>Zona Menarik:</strong> Jembatan Api-Api | <strong>Contoh Satwa:</strong> Udang", "<strong>Lokasi:</strong> Kulon Progo | <strong>Zona Menarik:</strong> Menara Pandang | <strong>Contoh Satwa:</strong> Biawak", "<strong>Lokasi:</strong> Dekat Pantai Congot | <strong>Zona Menarik:</strong> Gazebo | <strong>Contoh Satwa:</strong> Burung Kuntul"], kunci: [1] },
+            { tipe: "Ganda Kompleks", wacana: wacanaMangrove, pertanyaan: "Apa maksud istilah 'permata tersembunyi' dalam teks?", pilihan: ["Letak yang tidak mudah dijangkau, tetapi ramai dikunjungi.", "Tempat yang indah, tetapi belum dikenal banyak orang.", "Lokasi yang jarang diketahui, tetapi memiliki banyak spot menarik."], kunci: [1, 2] },
+            { tipe: "Benar Salah", wacana: wacanaMangrove + `<div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;"><p><strong>Amara:</strong> "Menurutku, judul Indahnya Hutan-Hutan Mangrove di Indonesia kurang tepat. Teksnya hanya fokus membahas hutan mangrove di Kulon Progo, bukan seluruh Indonesia."</p><p><strong>Bima:</strong> "Setuju. Kalau mau pakai judul itu, isi teks seharusnya membahas beberapa hutan mangrove di daerah lain juga. Bukan satu tempat saja."</p><p><strong>Jena:</strong> "Tapi, judul itu menurutku masih cocok, kok. Soalnya, Hutan Kulon Progo juga bagian dari hutan-hutan mangrove di Indonesia. Jadi, tetap mewakili."</p></div>`, pertanyaan: "Pendapat siapa yang tepat dalam menggambarkan kesesuaian judul dengan isi teks tersebut?", pilihan: ["Amara karena isi teks hanya fokus membahas Hutan Mangrove Kulon Progo.", "Bima karena judul lebih cocok jika membahas beberapa hutan mangrove lain juga.", "Jena karena Hutan Kulon Progo dapat mewakili seluruh hutan mangrove di Indonesia."], kunci: ["0_B", "1_B", "2_S"] },
+            { tipe: "Ganda Kompleks", wacana: wacanaBakwan, pertanyaan: "Mengapa bakwan dikatakan sebagai makanan yang unik?", pilihan: ["Memiliki isi yang sama dengan makanan Jepang.", "Perkembangannya dipengaruhi budaya negara lain.", "Ditemukan di berbagai daerah dengan sebutan berbeda."], kunci: [1, 2] },
+            { tipe: "Benar Salah", headerTabel: ["Sebelum", "Sesudah"], wacana: wacanaBakwan, pertanyaan: "Apa perbedaan bakwan sebelum dan sesudah terpengaruh budaya Jepang?", pilihan: ["Berisi aneka sayuran.", "Isi hanya daging.", "Isinya ditambahkan udang."], kunci: ["0_S", "1_B", "2_S"] },
+            { tipe: "Ganda Kompleks", wacana: wacanaBotol, pertanyaan: "Nilai moral apa saja yang diperoleh dari cerita tersebut?", pilihan: ["Bebas memilih gaya hidup.", "Peduli lingkungan itu penting.", "Hal kecil bisa jadi langkah baik."], kunci: [1, 2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaBotol, pertanyaan: "Makna ungkapan <i>tutup mata</i> berdasarkan dialog yang diucapkan Salma dalam wacana tersebut adalah ....", pilihan: ["mengabaikan masalah sampah di sekitar", "melupakan berbagai isu lingkungan", "menumpuk plastik-plastik sisa pakai", "meningkatkan kasus pencemaran tanah"], kunci: [0] },
+            { tipe: "Benar Salah", headerTabel: ["Sesuai", "Tidak Sesuai"], wacana: wacanaBotol + `<div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;"><p>Rania telah membaca cerita <i>Si Biru Kesayangan</i>. Ia tersadar untuk memulai aksi peduli lingkungan seperti Alvin.</p></div>`, pertanyaan: "Apa yang sebaiknya Rania lakukan untuk memulai aksinya berdasarkan cerita tersebut?", pilihan: ["Menggunakan botol minum isi ulang setiap hari.", "Membeli botol minum isi ulang untuk teman-temannya.", "Mengajak teman-teman membatasi pembelian minuman kemasan."], kunci: ["0_B", "1_S", "2_B"] },
+            { tipe: "Pilihan Ganda", wacana: wacanaMeteor, pertanyaan: "Mengapa hujan meteor tidak berbahaya?", pilihan: ["Meteor dapat berpindah.", "Hanya muncul saat langit cerah.", "Hanya muncul saat hujan.", "Akan habis terbakar di langit."], kunci: [3] },
+            { tipe: "Ganda Kompleks", wacana: wacanaMeteor, pertanyaan: "Berdasarkan cerita di atas, hal apa saja yang dapat membuat tokoh \"Aku\" senang?", pilihan: ["Menonton hujan meteor dengan ayahnya.", "Menulis buku harian sambil melihat meteor.", "Langit cerah ketika menonton hujan meteor."], kunci: [0, 2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaGiga, pertanyaan: "Bentuk apa yang bisa ditiru Giga saat bermain dengan Heksagonal?", pilihan: ["Bunga.", "Pohon cemara.", "Gunung.", "Atap rumah."], kunci: [0] },
+            { tipe: "Ganda Kompleks", wacana: wacanaGiga, pertanyaan: "Apa yang dibuat Giga saat bermain bersama pasukan kotak?", pilihan: ["Roket.", "Menara.", "Bendera."], kunci: [0, 1] },
+            { tipe: "Pilihan Ganda", wacana: wacanaCapGoMeh, pertanyaan: "Bagaimana cara Keluarga Adit dan Danu pergi ke Pulau Kemaro saat pertama kalinya?", pilihan: ["Menyeberangi jembatan ponton dengan mobil.", "Melewati jembatan ponton dengan berjalan kaki.", "Menggunakan kapal dari bawah jembatan Musi.", "Melewati jembatan Musi dengan berjalan kaki."], kunci: [2] },
+            { tipe: "Ganda Kompleks", wacana: wacanaCapGoMeh, pertanyaan: "Apa peristiwa yang membuat Danu dan Adit berpikir bahwa bersyukur adalah hal yang penting di dalam hidup mereka?", pilihan: ["Pertunjukan barongsai ditiadakan sehingga mereka memilih berkeliling pulau.", "Keluarga Danu berjalan kaki melewati jembatan Ponton meskipun hujan turun.", "Penerbangan lampion dihilangkan, mereka memilih makan makanan khas imlek."], kunci: [0, 2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaCapGoMeh, pertanyaan: "Berdasarkan cerita, apa yang akan kamu lakukan jika rencana berlibur ke pantai batal akibat hujan?", pilihan: ["Berlapang dada dan memilih untuk menyusun rencana menyenangkan lain di rumah.", "Merasa sedih sehingga memilih untuk melihat hujan dari jendela berharap hujan segera reda.", "Bersikap biasa-biasa saja dan memilih untuk berdiam diri di rumah tanpa aktivitas apapun.", "Memilih untuk melanjutkan tidur sembari berharap hujan bisa reda ketika sudah bangun nantinya."], kunci: [0] },
+            { tipe: "Pilihan Ganda", wacana: wacanaKota, pertanyaan: "Apa yang menjadi fokus utama dalam teks tersebut?", pilihan: ["Manfaat menggunakan kendaraan tenaga listrik.", "Pentingnya kota berkelanjutan untuk masa depan.", "Fasilitas publik yang tersedia di kota berkelanjutan.", "Cara pengolahan sampah di kota berkelanjutan."], kunci: [1] },
+            { tipe: "Pilihan Ganda", wacana: wacanaKota, pertanyaan: "Hasil apa yang diharapkan dari sistem pengolahan sampah yang baik?", pilihan: ["Kota menjadi bersih.", "Air menjadi melimpah.", "Udara menjadi sejuk.", "Waktu menjadi efisien."], kunci: [0] },
+            { tipe: "Ganda Kompleks", wacana: wacanaKota, pertanyaan: "Berdasarkan isi teks, mengapa ciri-ciri kota berkelanjutan belum nampak dalam gambar?", pilihan: ["Tidak ada gambar ruang terbuka hijau seperti taman dan lapangan.", "Tidak ada gambar alat transportasi ramah lingkungan bertenaga listrik.", "Tidak ada gambar manusia yang sedang melakukan aktivitas di jalan."], kunci: [0, 1, 2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaRuwatan, pertanyaan: "Siapa yang memotong rambut Rara saat ruwatan?", pilihan: ["Ketua adat", "Ibu Rara", "Ayah Rara", "Tukang cukur"], kunci: [0] },
+            { tipe: "Pilihan Ganda", wacana: wacanaRuwatan, pertanyaan: "Bagaimana perasaan Rara setelah mendengar penjelasan Ayah?", pilihan: ["Lega.", "Puas.", "Ceria.", "Ikhlas."], kunci: [3] },
+            { tipe: "Ganda Kompleks", wacana: wacanaRuwatan, pertanyaan: "Setelah membaca cerita tersebut, apa yang sebaiknya kamu lakukan jika suatu hari kamu ingin punya barang baru?", pilihan: ["Bertanya kepada ayah dan ibu apakah punya uang atau tidak.", "Meminta ayah dan ibu langsung membelikan barang itu.", "Memikirkan apakah barang itu perlu atau tidak dimiliki saat ini."], kunci: [0, 2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaArul, pertanyaan: "Dalam cerita tersebut, Erni mengatakan \"bersakit-sakit dahulu, bersenang-senang kemudian\". Apa maksud Erni saat mengatakan itu?", pilihan: ["Menginformasikan kepada Arul bahwa ia harus lebih giat dan semangat lagi dalam belajar.", "Memperjelas ucapan Erni bahwa Arul bisa mendapatkan nilai bagus kalau belajar bersama.", "Menasihati Arul bahwa ia bisa mendapatkan nilai yang bagus kalau dia tidak sombong.", "Memberitahukan kepada Arul bahwa ia harus mau belajar kalau ingin nilai ujiannya bagus lagi."], kunci: [3] },
+            { tipe: "Pilihan Ganda", wacana: wacanaArul, pertanyaan: "Bagaimana perubahan sikap Arul setelah menyadari nilainya jelek?", pilihan: ["Arul menjadi lebih giat untuk belajar sendiri di rumah.", "Arul berjanji belajar lebih giat kepada teman-temannya.", "Arul akhirnya mau belajar bersama teman-temanya.", "Arul merasa akan lebih mudah dalam ujian jika dia belajar."], kunci: [2] },
+            { tipe: "Benar Salah", headerTabel: ["Benar", "Salah"], wacana: wacanaArul + `<div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;"><p>Setelah membaca cerita tersebut, Riza merasa bahwa dirinya memiliki kesamaan dengan Arul yang sama-sama nilainya semakin memburuk.</p></div>`, pertanyaan: "Apa yang bisa dilakukan Riza agar nilainya bisa bagus berdasarkan pengalaman cerita Arul?", pilihan: ["Belajar kelompok bersama teman-teman agar ada yang mengajari materi sulit.", "Meyakini kemampuan diri dan tetap menjalankan hobi bermain sepak bola di lapangan.", "Bertanya ketika guru menjelaskan pelajaran agar lebih yakin menjawab pertanyaan saat ujian."], kunci: ["0_B", "1_S", "2_B"] },
+            { tipe: "Ganda Kompleks", wacana: wacanaNelayan, pertanyaan: "Apa frasa yang menunjukkan bahwa Yunus adalah seorang nelayan?", pilihan: ["Mengarungi laut.", "Melempar jala.", "Memperbaiki perahu."], kunci: [0, 1] },
+            { tipe: "Pilihan Ganda", wacana: wacanaNelayan, pertanyaan: "Bagaimana sikap Kamal setelah ia mendapat teguran dan dipaksa ikut melaut dengan Yunus?", pilihan: ["Tersadar untuk rajin melaut setiap hari.", "Bersemangat melaut bersama para warga.", "Tergerak untuk serius memperbaiki kapal.", "Berusaha keras membuktikan pada warga."], kunci: [0] },
+            { tipe: "Benar Salah", headerTabel: ["Sesuai", "Tidak Sesuai"], wacana: wacanaNelayan + `<div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;"><p>Setelah membaca cerita, Johan, Simon, dan Maria berpendapat sebagai berikut.</p><p><strong>Simon:</strong> "Aku kagum dengan sikap Yunus yang tetap mau menemani Kamal."</p><p><strong>Johan:</strong> "Iya, tapi Yunus terlalu sabar dengan perilaku Kamal. Itu menjengkelkan."</p><p><strong>Maria:</strong> "Aku pun geregetan karena Kamal memang pantas ditegur dengan keras."</p></div>`, pertanyaan: "Pendapat siapa yang paling sesuai dengan bagian akhir cerita tersebut?", pilihan: ["Johan karena Yunus memang terlalu baik hati pada Kamal dan tetangga.", "Simon karena Yunus mau menemani Kamal sampai terbiasa melaut sendiri.", "Maria karena Yunus menegur keras ketika perilaku Kamal sudah kelewatan."], kunci: ["0_S", "1_B", "2_B"] },
+            { tipe: "Pilihan Ganda", wacana: wacanaLianne, pertanyaan: "Siapa yang sangat suka menggambar?", pilihan: ["Albert.", "Giffari.", "Lianne.", "Amber."], kunci: [2] },
+            { tipe: "Pilihan Ganda", wacana: wacanaLianne, pertanyaan: "Bagaimana sifat yang ditunjukkan Lianne pada cerita tersebut?", pilihan: ["Rajin belajar, dibuktikan dengan ia yang berprestasi pada pelajaran matematika.", "Gemar olah raga, dibuktikan dengan ia yang rajin berlatih olah raga basket.", "Pantang menyerah, dibuktikan dengan ia yang terus giat mengasah bakatnya.", "Lapang dada, dibuktikan dengan ia yang dapat menerima kekurangan dirinya."], kunci: [2] },
+            { tipe: "Benar Salah", headerTabel: ["Setuju", "Tidak Setuju"], wacana: wacanaLianne + `<div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px;"><p>Dinda selesai membaca cerita "Mama, Aku Bukan Dia". Dinda juga tidak suka dibanding-bandingkan dengan orang lain. Ia yakin, setiap orang memiliki keunggulan yang berbeda-beda.</p></div>`, pertanyaan: "Apa kemungkinan yang dirasakan oleh Dinda ketika Lianne selalu dibandingkan dengan teman-temannya oleh Mamanya?", pilihan: ["Sedih, karena Lianne selalu tidak diakui keunikannya oleh mamanya.", "Marah, karena teman-temannya selalu lebih unggul darinya.", "Kecewa, karena ia tidak bisa menjadi dirinya sendiri di depan mamanya."], kunci: ["0_B", "1_S", "2_B"] }
+        ];
+
+        // ---------------------------------------------------------
+        // 3. LOGIKA CBT OFFLINE & TIMER
+        // ---------------------------------------------------------
+        function mulaiUjian() {
+            namaAktif = document.getElementById('input-nama').value.trim();
+            if (!namaAktif) {
+                alert("Namamu belum diisi, ayo isi dulu!");
+                return;
+            }
+
+            document.getElementById('layar-login').classList.add('hidden');
+            document.getElementById('area-ujian').classList.remove('hidden');
+            document.getElementById('header-nama-siswa').innerText = namaAktif;
+            
+            const saved = localStorage.getItem('jawaban_bhs_' + namaAktif);
+            if(saved) {
+                jawabanSiswa = JSON.parse(saved);
+                currentIndex = parseInt(localStorage.getItem('index_bhs_' + namaAktif)) || 0;
+            } else {
+                jawabanSiswa = new Array(paketSoalTKA.length).fill(null);
+            }
+            
+            renderSoal(currentIndex);
+            jalankanTimer();
+        }
+
+        function jalankanTimer() {
+            const timerElemen = document.getElementById('timer-display');
+            
+            timerInterval = setInterval(() => {
+                waktuSisa--;
+                
+                let menit = Math.floor(waktuSisa / 60);
+                let detik = waktuSisa % 60;
+                
+                timerElemen.innerText = `${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
+                
+                if (waktuSisa <= 180 && waktuSisa > 0) {
+                    timerElemen.classList.add('waktu-habis');
+                }
+
+                if (waktuSisa <= 0) {
+                    clearInterval(timerInterval);
+                    timerElemen.innerText = "00:00";
+                    alert("WAKTU HABIS! Jawabanmu otomatis dikumpulkan.");
+                    kumpulkanJawaban(true);
+                }
+            }, 1000);
+        }
+
+        function simpanJawabanSaatIni() {
+            const container = document.getElementById('wadah-pilihan');
+            const inputs = container.querySelectorAll('input:checked');
+            
+            jawabanSiswa[currentIndex] = Array.from(inputs).map(el => {
+                return el.value.includes('_') ? el.value : parseInt(el.value);
+            });
+            
+            localStorage.setItem('jawaban_bhs_' + namaAktif, JSON.stringify(jawabanSiswa));
+            localStorage.setItem('index_bhs_' + namaAktif, currentIndex);
+        }
+
+        function renderSoal(indeks) {
+            const s = paketSoalTKA[indeks];
+            document.getElementById('nomor-soal-display').innerText = `${indeks + 1}/30`;
+            
+            const wadahWacana = document.getElementById('konten-wacana');
+            if(s.wacana) { 
+                wadahWacana.classList.remove('hidden'); 
+                wadahWacana.innerHTML = s.wacana; 
+            } else { 
+                wadahWacana.classList.add('hidden'); 
+            }
+            
+            document.getElementById('konten-pertanyaan').innerHTML = s.pertanyaan;
+            const containerPilihan = document.getElementById('wadah-pilihan');
+            containerPilihan.innerHTML = '';
+            
+            const savedAns = jawabanSiswa[indeks] || []; 
+
+            if (s.tipe === 'Benar Salah') {
+                const header1 = s.headerTabel ? s.headerTabel[0] : "Benar";
+                const header2 = s.headerTabel ? s.headerTabel[1] : "Salah";
+                
+                let htmlTable = `
+                    <div class="overflow-hidden border border-blue-300 rounded-xl mb-2 shadow-sm">
+                    <table class="w-full text-sm text-left" style="border:none;">
+                        <thead class="bg-blue-100 text-blue-900 font-bold" style="border-bottom: 2px solid #93c5fd;">
+                            <tr>
+                                <th class="p-3" style="border:none;">Pernyataan</th>
+                                <th class="p-3 text-center w-20" style="border:none;">${header1}</th>
+                                <th class="p-3 text-center w-20" style="border:none;">${header2}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                `;
+                s.pilihan.forEach((pil, i) => {
+                    const valB = i + "_B";
+                    const valS = i + "_S";
+                    const isCheckedB = savedAns.includes(valB) ? "checked" : "";
+                    const isCheckedS = savedAns.includes(valS) ? "checked" : "";
+                    
+                    htmlTable += `
+                        <tr class="hover:bg-blue-50 transition" style="border-bottom: 1px solid #e5e7eb;">
+                            <td class="p-3 text-gray-700 leading-snug" style="border:none;">${pil}</td>
+                            <td class="p-3 text-center align-middle" style="border:none; border-left: 1px solid #e5e7eb;">
+                                <input type="radio" name="bs_${i}" value="${valB}" ${isCheckedB} onchange="simpanJawabanSaatIni()" class="w-5 h-5 accent-blue-600 cursor-pointer">
+                            </td>
+                            <td class="p-3 text-center align-middle" style="border:none; border-left: 1px solid #e5e7eb;">
+                                <input type="radio" name="bs_${i}" value="${valS}" ${isCheckedS} onchange="simpanJawabanSaatIni()" class="w-5 h-5 accent-blue-600 cursor-pointer">
+                            </td>
+                        </tr>
+                    `;
+                });
+                htmlTable += `</tbody></table></div>`;
+                containerPilihan.innerHTML = htmlTable;
+            } 
+            else {
+                const type = s.tipe === 'Ganda Kompleks' ? 'checkbox' : 'radio';
+                s.pilihan.forEach((pil, i) => {
+                    const isChecked = savedAns.includes(i) ? "checked" : "";
+                    containerPilihan.innerHTML += `
+                        <label class="flex items-center gap-3 p-3 bg-white border border-gray-300 rounded-lg mb-2 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition shadow-sm">
+                            <input type="${type}" name="jawaban" value="${i}" ${isChecked} onchange="simpanJawabanSaatIni()" class="w-5 h-5 text-blue-600">
+                            <span class="text-gray-800 font-medium text-sm md:text-base leading-snug w-full">${pil}</span>
+                        </label>
+                    `;
+                });
+            }
+
+            // PERBAIKAN BUG TOMBOL (Menggunakan classList, BUKAN style.display)
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnSelesai = document.getElementById('btn-selesai');
+
+            if (indeks === 0) {
+                btnPrev.classList.add('hidden');
+            } else {
+                btnPrev.classList.remove('hidden');
+            }
+
+            if (indeks === paketSoalTKA.length - 1) {
+                btnNext.classList.add('hidden');
+                btnSelesai.classList.remove('hidden');
+            } else {
+                btnNext.classList.remove('hidden');
+                btnSelesai.classList.add('hidden');
+            }
+        }
+
+        function gantiSoal(arah) {
+            simpanJawabanSaatIni();
+            const newIndex = currentIndex + arah;
+            if (newIndex >= 0 && newIndex < paketSoalTKA.length) {
+                currentIndex = newIndex;
+                renderSoal(currentIndex);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function hitungSkor() {
+            let skor = 0;
+            const bobotSoal = 100 / paketSoalTKA.length;
+            
+            for (let i = 0; i < paketSoalTKA.length; i++) {
+                const kunci = paketSoalTKA[i].kunci;
+                const jawab = jawabanSiswa[i] || [];
+                if (JSON.stringify(kunci.slice().sort()) === JSON.stringify(jawab.slice().sort())) {
+                    skor += bobotSoal;
+                }
+            }
+            return Math.round(skor);
+        }
+
+        function kumpulkanJawaban(autoSubmit) {
+            simpanJawabanSaatIni();
+            
+            if (!autoSubmit) {
+                let totalTerjawab = jawabanSiswa.filter(ans => ans && ans.length > 0).length;
+                if (totalTerjawab < paketSoalTKA.length) {
+                    if (!confirm(`Ada ${paketSoalTKA.length - totalTerjawab} soal belum dijawab. Yakin selesai?`)) return;
+                } else {
+                    if (!confirm(`Semua soal telah terjawab. Kumpulkan sekarang?`)) return;
+                }
+            }
+
+            clearInterval(timerInterval);
+            
+            const nilaiAkhir = hitungSkor();
+
+            document.getElementById('area-ujian').classList.add('hidden');
+            document.getElementById('layar-hasil').classList.remove('hidden');
+            document.getElementById('nama-hasil').innerText = namaAktif;
+            document.getElementById('skor-akhir').innerText = nilaiAkhir;
+
+            localStorage.removeItem('jawaban_bhs_' + namaAktif);
+            localStorage.removeItem('index_bhs_' + namaAktif);
+        }
+    </script>
+</body>
+</html>
