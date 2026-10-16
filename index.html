@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CBT Les Ahe - TKA Bahasa Indonesia</title>
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- SDK FIREBASE -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+
     <style>
         #konten-wacana img { max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto; }
         .hidden { display: none !important; }
@@ -13,7 +18,7 @@
 </head>
 <body class="bg-gray-100 font-sans text-gray-800 antialiased min-h-screen">
 
-    <!-- ================= LAYAR LOGIN ================= -->
+    <!-- ================= LAYAR LOGIN SISWA ================= -->
     <div id="layar-login" class="flex items-center justify-center min-h-screen p-4">
         <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-blue-600">
             <h1 class="text-2xl font-bold text-center text-blue-700 mb-2">Ujian TKA Bahasa</h1>
@@ -22,7 +27,46 @@
                 <label class="block text-gray-700 font-semibold mb-2">Nama Lengkap</label>
                 <input type="text" id="input-nama" class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik namamu di sini...">
             </div>
-            <button onclick="mulaiUjian()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Mulai Kerjakan</button>
+            <button onclick="mulaiUjian()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-md mb-4">Mulai Kerjakan</button>
+            
+            <div class="text-center border-t pt-4">
+                <button onclick="masukGuru()" class="text-xs text-gray-400 hover:text-purple-600 underline font-semibold">Masuk sebagai Guru (Lihat Daftar Nilai)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= HALAMAN GURU (DAFTAR NILAI LIVE) ================= -->
+    <div id="guru-page" class="hidden p-4 max-w-2xl mx-auto mt-6">
+        <div class="bg-white p-6 rounded-2xl shadow-xl border-t-8 border-purple-600">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <div>
+                    <h2 class="text-2xl font-black text-purple-700">Daftar Nilai Guru</h2>
+                    <p class="text-xs text-gray-500 font-medium">Ujian TKA Bahasa Indonesia (30 Soal) — Live Firebase</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="kembaliKeLoginDariGuru()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold py-2 px-3 rounded-lg transition">⬅️ Kembali</button>
+                    <button onclick="resetDatabase()" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition">🔄 Reset Data Baru</button>
+                </div>
+            </div>
+
+            <div class="bg-green-50 border border-green-200 text-green-700 text-xs font-bold p-3 rounded-lg mb-5 text-center">
+                ✅ Sistem Aktif: Waktu berjalan otomatis 2 jam untuk masing-masing siswa sejak klik Mulai.
+            </div>
+
+            <h3 class="font-black text-gray-700 mb-3">📋 Laporan Nilai Siswa (Live)</h3>
+            <div class="bg-white border rounded-xl overflow-hidden shadow-sm">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-purple-50 border-b">
+                        <tr>
+                            <th class="p-3 text-sm font-bold text-purple-900 w-12 text-center">No</th>
+                            <th class="p-3 text-sm font-bold text-purple-900">Nama Siswa</th>
+                            <th class="p-3 text-sm font-bold text-purple-900 text-center">Benar</th>
+                            <th class="p-3 text-sm font-bold text-purple-900 text-center">Skor Akhir</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabel-hasil-siswa" class="divide-y divide-gray-200 text-sm"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -57,6 +101,7 @@
             <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
                 <p class="text-sm text-gray-500 font-semibold mb-1">NILAI AKHIR</p>
                 <p id="skor-akhir" class="text-5xl font-extrabold text-green-600">100</p>
+                <p id="detail-benar-akhir" class="text-xs text-gray-400 mt-2 font-semibold"></p>
             </div>
             <button onclick="keluarKeAwal()" class="bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Kembali ke Awal</button>
         </div>
@@ -65,15 +110,36 @@
     <!-- ================= SCRIPT LOGIKA & DATABASE ================= -->
     <script>
         // ---------------------------------------------------------
-        // 1. VARIABEL GLOBAL APLIKASI
+        // 1. KONFIGURASI FIREBASE ALDO & DATA MANUAL
         // ---------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyCoC3kabcXL-C9U_jhgLdcAmRcnqfVP4AQ",
+            authDomain: "simulasitka-62b3f.firebaseapp.com",
+            databaseURL: "https://simulasitka-62b3f-default-rtdb.firebaseio.com", 
+            projectId: "simulasitka-62b3f",
+            storageBucket: "simulasitka-62b3f.firebasestorage.app",
+            messagingSenderId: "1070761016017",
+            appId: "1:1070761016017:web:753a59214586d581c6a3f0",
+            measurementId: "G-54558PFC3R"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Data 2 anak yang sudah mengerjakan (otomatis selalu tampil di urutan 1 dan 2)
+        const dataManualAwal = [
+            { nama: "Arjuna", benar: 18, nilai: 60 },
+            { nama: "Zikram", benar: 19, nilai: 63 }
+        ];
+
+        // Variabel Global Aplikasi
         let namaAktif = "";
         let currentIndex = 0;
         let jawabanSiswa = [];
         let timerInterval;
 
         // ---------------------------------------------------------
-        // 2. DATABASE WACANA & SOAL (BAHASA INDONESIA)
+        // 2. DATABASE WACANA & SOAL (BAHASA INDONESIA - 30 SOAL)
         // ---------------------------------------------------------
         const wacanaMangrove = `
             <p style="margin-bottom: 10px; font-weight: bold; text-align: center;">Indahnya Hutan-Hutan Mangrove di Indonesia</p>
@@ -126,7 +192,7 @@
             <p style="margin-bottom: 8px; text-align: justify;">Adit dan Danu senang sekali hari ini karena Ibu dan Ayah akan mengajak mereka pergi melihat perayaan Cap Go Meh di Pulau Kemaro. Masyarakat Tionghoa di Kota Palembang merayakan Cap Go Meh, dan orangtuanya ingin mengenalkan perayaan tersebut kepada mereka.</p>
             <p style="margin-bottom: 8px; text-align: justify;">Ini adalah kedua kalinya Adit dan Danu pergi ke Pulau Kemaro. Waktu itu, mereka naik kapal dari bawah jembatan Musi. Kali ini, mereka akan menyeberangi sungai Musi dengan berjalan kaki di atas jembatan ponton, yang dipasang khusus saat perayaan Imlek setiap tahunnya. Mereka berangkat setelah makan malam.</p>
             <p style="margin-bottom: 8px; text-align: justify;">Malam itu, banyak orang berjalan kaki melewati jembatan ponton ke Pulau Kemaro. Semua orang memakai baju merah, termasuk keluarga Adit dan Danu. Di Pulau Kemaro, mereka menyaksikan pertunjukkan barongsai dan penerbangan lampion. Acaranya sangat meriah. Adit dan Danu senang bisa mengenal kebudayaan Tionghoa melalui perayaan Cap Go Meh.</p>
-            <p style="margin-bottom: 15px; text-align: justify;">Namun, ketika mereka tiba di Pulau Kemaro, mereka kecewa karena hujan deras turun. Pertunjukkan barongsai dan penerbangan lampion harus dibatalkan. Adit dan Danu merasa sedih karena tidak bisa melihat semua acara yang telah nantikan. Meskipun begitu, mereka tetap berusaha menikmati perayaan Cap Go Meh dengan berkeliling pulau dan mencoba makanan khas Imlek. Mereka belajar bahwa tidak semua hal bisa berjalan sesuai rencana, dan yang terpenting adalah tetap bersyukur dan menjalani dengan baik apa yang ada.</p>
+            <p style="margin-bottom: 15px; text-align: justify;">Namun, ketika mereka tiba di Pulau Kemaro, mereka kecewa karena hujan deras turun. Pertunjukkan barongsai dan penerbangan lampion harus dibatalkan. Adit dan Danu merasa sedih karena tidak bisa melihat semua acara yang telah mereka nantikan. Meskipun begitu, mereka tetap berusaha menikmati perayaan Cap Go Meh dengan berkeliling pulau dan mencoba makanan khas Imlek. Mereka belajar bahwa tidak semua hal bisa berjalan sesuai rencana, dan yang terpenting adalah tetap bersyukur dan menjalani dengan baik apa yang ada.</p>
         `;
         const wacanaKota = `
             <img src="soal16.png">
@@ -213,23 +279,88 @@
         ];
 
         // ---------------------------------------------------------
-        // 3. LOGIKA CBT OFFLINE & TIMER
+        // 3. FUNGSI HALAMAN GURU (FIREBASE LIVE)
         // ---------------------------------------------------------
-        
-        // Cek jika siswa merefresh halaman maka status login/ujian diteruskan
+        function masukGuru() {
+            let pin = prompt("Masukkan PIN Rahasia Guru (Ketik: ALDO123):");
+            if (pin !== "ALDO123") {
+                alert("PIN Salah!");
+                return;
+            }
+
+            document.getElementById('layar-login').classList.add('hidden');
+            document.getElementById('guru-page').classList.remove('hidden');
+
+            // Dengarkan data nilai secara real-time dari Firebase
+            db.ref('tka_bahasa_indo/hasil').on('value', (snapshot) => {
+                const data = snapshot.val();
+                const tabel = document.getElementById('tabel-hasil-siswa');
+                tabel.innerHTML = '';
+
+                let nomorUrut = 1;
+
+                // 1. Tampilkan 2 anak pertama secara manual (1. Arjuna 60, 2. Zikram 63)
+                dataManualAwal.forEach((siswaManual) => {
+                    tabel.innerHTML += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 text-center font-bold text-gray-500">${nomorUrut++}</td>
+                            <td class="p-3 text-gray-800 font-bold">${siswaManual.nama}</td>
+                            <td class="p-3 text-center text-gray-600">${siswaManual.benar} / ${paketSoalTKA.length}</td>
+                            <td class="p-3 text-center font-black text-blue-600 text-lg">${siswaManual.nilai}</td>
+                        </tr>
+                    `;
+                });
+
+                // 2. Tampilkan anak-anak berikutnya dari Firebase
+                if (data) {
+                    for (const key in data) {
+                        const item = data[key];
+                        const namaSiswa = item.nama || key;
+
+                        // Lewati jika namanya sama persis dengan data manual agar tidak dobel
+                        const sudahAda = dataManualAwal.some(m => m.nama.toLowerCase() === namaSiswa.toLowerCase());
+                        if (!sudahAda) {
+                            tabel.innerHTML += `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="p-3 text-center font-bold text-gray-500">${nomorUrut++}</td>
+                                    <td class="p-3 text-gray-800 font-bold">${namaSiswa}</td>
+                                    <td class="p-3 text-center text-gray-600">${item.benar} / ${paketSoalTKA.length}</td>
+                                    <td class="p-3 text-center font-black text-blue-600 text-lg">${item.nilai}</td>
+                                </tr>
+                            `;
+                        }
+                    }
+                }
+            });
+        }
+
+        function kembaliKeLoginDariGuru() {
+            document.getElementById('guru-page').classList.add('hidden');
+            document.getElementById('layar-login').classList.remove('hidden');
+        }
+
+        function resetDatabase() {
+            if (confirm("Yakin ingin mereset nilai tambahan di Firebase? (Data manual 1. Arjuna & 2. Zikram akan tetap aman di tabel)")) {
+                db.ref('tka_bahasa_indo/hasil').set(null).then(() => {
+                    alert("Daftar nilai tambahan berhasil dibersihkan!");
+                });
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 4. LOGIKA CBT SISWA & TIMER OTOMATIS 2 JAM
+        // ---------------------------------------------------------
         window.onload = function() {
             if (localStorage.getItem('nama_bhs_aktif')) {
                 namaAktif = localStorage.getItem('nama_bhs_aktif');
                 document.getElementById('input-nama').value = namaAktif;
                 
-                // Bypass login screen
                 document.getElementById('layar-login').classList.add('hidden');
                 document.getElementById('area-ujian').classList.remove('hidden');
                 document.getElementById('header-nama-siswa').innerText = namaAktif;
                 
-                // Ambil jawaban yang tersimpan
                 const saved = localStorage.getItem('jawaban_bhs_' + namaAktif);
-                if(saved) {
+                if (saved) {
                     jawabanSiswa = JSON.parse(saved);
                     currentIndex = parseInt(localStorage.getItem('index_bhs_' + namaAktif)) || 0;
                 } else {
@@ -237,7 +368,7 @@
                 }
                 
                 renderSoal(currentIndex);
-                jalankanTimer(); // Jalankan ulang timer
+                jalankanTimer();
             }
         };
 
@@ -248,7 +379,6 @@
                 return;
             }
 
-            // Simpan nama siswa aktif ke localStorage
             localStorage.setItem('nama_bhs_aktif', namaAktif);
 
             document.getElementById('layar-login').classList.add('hidden');
@@ -256,7 +386,7 @@
             document.getElementById('header-nama-siswa').innerText = namaAktif;
             
             const saved = localStorage.getItem('jawaban_bhs_' + namaAktif);
-            if(saved) {
+            if (saved) {
                 jawabanSiswa = JSON.parse(saved);
                 currentIndex = parseInt(localStorage.getItem('index_bhs_' + namaAktif)) || 0;
             } else {
@@ -264,27 +394,26 @@
             }
             
             renderSoal(currentIndex);
-            jalankanTimer();
+            jalankanTimer(); // Otomatis mulai 2 jam saat anak klik mulai
         }
 
         function jalankanTimer() {
             const timerElemen = document.getElementById('timer-display');
             
-            // Ambil waktu akhir (endTime) dari local storage, atau buat baru jika belum ada
             let endTime = localStorage.getItem('endtime_bhs_' + namaAktif);
             if (!endTime) {
-                // Atur durasi murni 120 menit (2 Jam) = 120 * 60 * 1000 milidetik
+                // Durasi otomatis 120 menit (2 Jam) sejak siswa klik mulai
                 endTime = Date.now() + (120 * 60 * 1000); 
                 localStorage.setItem('endtime_bhs_' + namaAktif, endTime);
             } else {
                 endTime = parseInt(endTime);
             }
 
+            clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 let waktuSisaMS = endTime - Date.now();
                 
                 if (waktuSisaMS <= 0) {
-                    // WAKTU HABIS
                     clearInterval(timerInterval);
                     timerElemen.innerText = "00:00:00";
                     alert("WAKTU HABIS! Jawabanmu otomatis dikumpulkan.");
@@ -292,24 +421,19 @@
                     return;
                 }
 
-                // Konversi milidetik ke Jam, Menit, Detik
                 let sisaDetik = Math.floor(waktuSisaMS / 1000);
                 let jam = Math.floor(sisaDetik / 3600);
                 let menit = Math.floor((sisaDetik % 3600) / 60);
                 let detik = sisaDetik % 60;
                 
-                // Format selalu HH:MM:SS
                 let formatWaktu = `${jam.toString().padStart(2, '0')}:${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
-                
                 timerElemen.innerText = formatWaktu;
                 
-                // Peringatan 3 menit (180 detik) terakhir
                 if (sisaDetik <= 180) {
                     timerElemen.classList.add('waktu-habis');
                 } else {
                     timerElemen.classList.remove('waktu-habis');
                 }
-
             }, 1000);
         }
 
@@ -330,7 +454,7 @@
             document.getElementById('nomor-soal-display').innerText = `${indeks + 1}/30`;
             
             const wadahWacana = document.getElementById('konten-wacana');
-            if(s.wacana) { 
+            if (s.wacana) { 
                 wadahWacana.classList.remove('hidden'); 
                 wadahWacana.innerHTML = s.wacana; 
             } else { 
@@ -422,18 +546,17 @@
             }
         }
 
-        function hitungSkor() {
-            let skor = 0;
-            const bobotSoal = 100 / paketSoalTKA.length;
-            
+        function hitungHasil() {
+            let jmlBenar = 0;
             for (let i = 0; i < paketSoalTKA.length; i++) {
                 const kunci = paketSoalTKA[i].kunci;
                 const jawab = jawabanSiswa[i] || [];
                 if (JSON.stringify(kunci.slice().sort()) === JSON.stringify(jawab.slice().sort())) {
-                    skor += bobotSoal;
+                    jmlBenar++;
                 }
             }
-            return Math.round(skor);
+            const skorAkhir = Math.round((jmlBenar / paketSoalTKA.length) * 100);
+            return { benar: jmlBenar, nilai: skorAkhir };
         }
 
         function kumpulkanJawaban(autoSubmit) {
@@ -450,14 +573,23 @@
 
             clearInterval(timerInterval);
             
-            const nilaiAkhir = hitungSkor();
+            const hasil = hitungHasil();
+
+            // Simpan ke Firebase agar langsung muncul di Daftar Nilai Guru
+            const keyAman = namaAktif.replace(/[.#$\[\]\/]/g, '_');
+            db.ref('tka_bahasa_indo/hasil/' + keyAman).set({
+                nama: namaAktif,
+                benar: hasil.benar,
+                nilai: hasil.nilai
+            });
 
             document.getElementById('area-ujian').classList.add('hidden');
             document.getElementById('layar-hasil').classList.remove('hidden');
             document.getElementById('nama-hasil').innerText = namaAktif;
-            document.getElementById('skor-akhir').innerText = nilaiAkhir;
+            document.getElementById('skor-akhir').innerText = hasil.nilai;
+            document.getElementById('detail-benar-akhir').innerText = `Benar ${hasil.benar} dari ${paketSoalTKA.length} soal`;
 
-            // Bersihkan local storage agar ujian tidak lanjut saat di-refresh lagi
+            // Hapus sesi ujian siswa aktif
             localStorage.removeItem('nama_bhs_aktif');
             localStorage.removeItem('jawaban_bhs_' + namaAktif);
             localStorage.removeItem('index_bhs_' + namaAktif);
@@ -465,7 +597,6 @@
         }
 
         function keluarKeAwal() {
-            // Hapus paksa semua penyimpanan lokal lalu reload
             localStorage.clear();
             location.reload();
         }
